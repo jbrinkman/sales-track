@@ -19,10 +19,12 @@ go.work
 
 # Wails build directory
 build/
+build/bin
 
 # Frontend dependencies
 frontend/node_modules/
 frontend/dist/
+node_modules
 frontend/.nuxt/
 frontend/.output/
 frontend/.vite/
