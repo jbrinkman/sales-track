@@ -93,6 +93,9 @@ export default defineConfig({
     'btn': 'px-4 py-2 rounded-lg font-medium transition-colors duration-200',
     'btn-primary': 'btn bg-primary-600 text-white hover:bg-primary-700 focus:ring-2 focus:ring-primary-500 focus:ring-offset-2',
     'btn-secondary': 'btn bg-gray-200 text-gray-900 hover:bg-gray-300 focus:ring-2 focus:ring-gray-500 focus:ring-offset-2',
+    'btn-success': 'btn bg-success-600 text-white hover:bg-success-700 focus:ring-2 focus:ring-success-500 focus:ring-offset-2',
+    'btn-warning': 'btn bg-warning-600 text-white hover:bg-warning-700 focus:ring-2 focus:ring-warning-500 focus:ring-offset-2',
+    'btn-error': 'btn bg-error-600 text-white hover:bg-error-700 focus:ring-2 focus:ring-error-500 focus:ring-offset-2',
     'card': 'bg-white rounded-lg shadow-md border border-gray-200',
     'input': 'px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500',
   }

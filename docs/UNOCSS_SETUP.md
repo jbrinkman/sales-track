@@ -41,6 +41,9 @@ UnoCSS virtual import: `import 'virtual:uno.css'`
 - `btn`: Base button styling
 - `btn-primary`: Primary button with hover/focus states
 - `btn-secondary`: Secondary button styling
+- `btn-success`: Success button with green theme
+- `btn-warning`: Warning button with yellow/orange theme
+- `btn-error`: Error button with red theme
 - `card`: Card component with shadow and border
 - `input`: Form input styling with focus states
 
@@ -50,7 +53,9 @@ UnoCSS virtual import: `import 'virtual:uno.css'`
 ```vue
 <button class="btn-primary">Primary Action</button>
 <button class="btn-secondary">Secondary Action</button>
-<button class="btn bg-success-600 text-white hover:bg-success-700">Success</button>
+<button class="btn-success">Success Action</button>
+<button class="btn-warning">Warning Action</button>
+<button class="btn-error">Error Action</button>
 ```
 
 ### Cards

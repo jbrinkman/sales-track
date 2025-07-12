@@ -6,7 +6,9 @@
     <div class="space-x-2">
       <button class="btn-primary">Primary Button</button>
       <button class="btn-secondary">Secondary Button</button>
-      <button class="btn bg-success-600 text-white hover:bg-success-700">Success Button</button>
+      <button class="btn-success">Success Button</button>
+      <button class="btn-warning">Warning Button</button>
+      <button class="btn-error">Error Button</button>
     </div>
 
     <!-- Card Test -->
@@ -37,6 +39,4 @@
   </div>
 </template>
 
-<script lang="ts" setup>
-// Component for testing UnoCSS functionality
-</script>
+<!-- Component for testing UnoCSS functionality -->
