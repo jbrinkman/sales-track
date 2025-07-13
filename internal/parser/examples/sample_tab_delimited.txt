@@ -1,0 +1,6 @@
+Store	Vendor	Date	Description	Sale Price	Commission	Remaining
+Downtown Store	Electronics Plus	2024-01-15	Samsung 55" Smart TV	899.99	89.99	810.00
+Mall Location	Home & Garden Co	2024-01-16	Outdoor Patio Set	1299.00	129.90	1169.10
+Westside Branch	Fashion Forward	2024-01-18	Designer Handbag	425.00	42.50	382.50
+Eastside Outlet	Kitchen Essentials	2024-01-20	Professional Blender Set	189.99	19.00	170.99
+Downtown Store	Sports Authority	2024-01-22	Running Shoes Premium	179.95	18.00	161.95
