@@ -13,6 +13,8 @@ The HTML Table Parser is a core component that enables users to copy HTML table 
 - **Automatic Table Detection**: Finds and selects the best table when multiple tables are present
 - **Delimited Data Support**: Converts tab-separated and pipe-separated data to HTML tables
 - **Robust HTML Processing**: Handles malformed HTML and various encoding issues
+- **Headerless Row Parsing**: Processes table rows without headers using positional mapping
+- **Fragment Support**: Handles HTML fragments like `<tr>` elements without full table structure
 
 ### 📊 **Intelligent Column Mapping**
 - **Flexible Column Names**: Recognizes various column name variations (e.g., "Store", "Shop", "Location")
@@ -89,6 +91,67 @@ func main() {
             i+1, record.Store, record.Description, record.SalePrice)
     }
 }
+```
+
+### Headerless Row Parsing (Consignable Workflow)
+
+For copying table rows without headers (common when copying from Consignable):
+
+```go
+// Configure parser for Consignable format
+parser := parser.NewHTMLTableParser()
+parser.SetConsignableMapping() // Store, Vendor, Date, Description, Sale Price, Commission, Remaining
+
+// Parse HTML rows without headers
+htmlRows := `
+<tr>
+    <td>Downtown Store</td>
+    <td>Electronics Plus</td>
+    <td>2024-01-15</td>
+    <td>Samsung TV</td>
+    <td>$899.99</td>
+    <td>$89.99</td>
+    <td>$810.00</td>
+</tr>
+<tr>
+    <td>Mall Location</td>
+    <td>Home & Garden</td>
+    <td>2024-01-16</td>
+    <td>Patio Set</td>
+    <td>$1299.00</td>
+    <td>$129.90</td>
+    <td>$1169.10</td>
+</tr>
+`
+
+result, err := parser.ParseHTML(htmlRows)
+if err != nil {
+    fmt.Printf("Parsing failed: %v\n", err)
+    return
+}
+
+fmt.Printf("Successfully parsed %d records from headerless rows\n", result.SuccessCount)
+```
+
+### Custom Positional Mapping
+
+For custom column orders:
+
+```go
+parser := parser.NewHTMLTableParser()
+
+// Define custom column order
+parser.SetPositionalMapping([]string{
+    "vendor",      // Column 0
+    "store",       // Column 1
+    "date",        // Column 2
+    "description", // Column 3
+    "sale_price",  // Column 4
+    "commission",  // Column 5 (optional)
+    "remaining",   // Column 6 (optional)
+})
+
+result, err := parser.ParseHTML(htmlRows)
 ```
 
 ### Advanced Configuration

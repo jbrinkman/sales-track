@@ -15,6 +15,10 @@ import (
 type HTMLTableParser struct {
 	// Configuration options
 	StrictMode bool // If true, requires exact column matches
+	
+	// Positional mapping for headerless tables
+	UsePositionalMapping bool     // Enable positional column mapping
+	PositionalColumns    []string // Column names in order for positional mapping
 }
 
 // NewHTMLTableParser creates a new HTML table parser
@@ -22,6 +26,27 @@ func NewHTMLTableParser() *HTMLTableParser {
 	return &HTMLTableParser{
 		StrictMode: false,
 	}
+}
+
+// SetPositionalMapping configures the parser to use positional column mapping
+// for headerless tables. Columns should be in the order they appear in the HTML.
+func (p *HTMLTableParser) SetPositionalMapping(columns []string) {
+	p.UsePositionalMapping = true
+	p.PositionalColumns = columns
+}
+
+// SetConsignableMapping configures the parser for the standard Consignable format:
+// Store, Vendor, Date, Description, Sale Price, Commission, Remaining
+func (p *HTMLTableParser) SetConsignableMapping() {
+	p.SetPositionalMapping([]string{
+		"store",
+		"vendor", 
+		"date",
+		"description",
+		"sale_price",
+		"commission",
+		"remaining",
+	})
 }
 
 // ParseResult contains the results of parsing HTML table data
@@ -179,6 +204,11 @@ func (p *HTMLTableParser) cleanHTML(htmlData string) string {
 	// Remove common problematic characters and normalize whitespace
 	cleaned := strings.TrimSpace(htmlData)
 	
+	// Check if this looks like table rows without a table wrapper
+	if p.looksLikeTableRows(cleaned) {
+		return p.wrapTableRows(cleaned)
+	}
+	
 	// If it doesn't look like HTML, wrap it in a basic table structure
 	if !strings.Contains(strings.ToLower(cleaned), "<table") {
 		// Try to detect if it's tab-separated or other delimited data
@@ -193,6 +223,59 @@ func (p *HTMLTableParser) cleanHTML(htmlData string) string {
 	}
 	
 	return cleaned
+}
+
+// looksLikeTableRows checks if the HTML looks like table rows without table wrapper
+func (p *HTMLTableParser) looksLikeTableRows(htmlData string) bool {
+	lower := strings.ToLower(htmlData)
+	
+	// Check if it contains <tr> tags but no <table> tag
+	hasTR := strings.Contains(lower, "<tr")
+	hasTable := strings.Contains(lower, "<table")
+	
+	return hasTR && !hasTable
+}
+
+// wrapTableRows wraps table rows in a proper table structure
+func (p *HTMLTableParser) wrapTableRows(rowsHTML string) string {
+	var htmlBuilder strings.Builder
+	
+	htmlBuilder.WriteString("<html><body><table>")
+	
+	// If using positional mapping, add synthetic headers
+	if p.UsePositionalMapping && len(p.PositionalColumns) > 0 {
+		htmlBuilder.WriteString("<thead><tr>")
+		for _, col := range p.PositionalColumns {
+			// Convert internal column names to display names
+			displayName := p.getDisplayColumnName(col)
+			htmlBuilder.WriteString(fmt.Sprintf("<th>%s</th>", displayName))
+		}
+		htmlBuilder.WriteString("</tr></thead>")
+	}
+	
+	htmlBuilder.WriteString("<tbody>")
+	htmlBuilder.WriteString(rowsHTML)
+	htmlBuilder.WriteString("</tbody></table></body></html>")
+	
+	return htmlBuilder.String()
+}
+
+// getDisplayColumnName converts internal column names to display names
+func (p *HTMLTableParser) getDisplayColumnName(internalName string) string {
+	displayNames := map[string]string{
+		"store":       "Store",
+		"vendor":      "Vendor", 
+		"date":        "Date",
+		"description": "Description",
+		"sale_price":  "Sale Price",
+		"commission":  "Commission",
+		"remaining":   "Remaining",
+	}
+	
+	if display, exists := displayNames[internalName]; exists {
+		return display
+	}
+	return internalName
 }
 
 // convertDelimitedToHTML converts tab-separated or pipe-separated data to HTML table
@@ -356,6 +439,39 @@ func (p *HTMLTableParser) extractTextContent(node *html.Node) string {
 func (p *HTMLTableParser) createColumnMapping(headers []string) (map[string]int, error) {
 	mapping := make(map[string]int)
 	
+	// If using positional mapping, create mapping based on position
+	if p.UsePositionalMapping && len(p.PositionalColumns) > 0 {
+		// Check if we have enough columns
+		if len(headers) < len(p.PositionalColumns) {
+			return nil, fmt.Errorf("positional mapping expects %d columns, but only %d headers found", 
+				len(p.PositionalColumns), len(headers))
+		}
+		
+		for i, col := range p.PositionalColumns {
+			if i < len(headers) {
+				mapping[col] = i
+			}
+		}
+		
+		// Validate we have the minimum required columns
+		requiredColumns := []string{"store", "vendor", "date", "description", "sale_price"}
+		missingColumns := []string{}
+		
+		for _, col := range requiredColumns {
+			if _, exists := mapping[col]; !exists {
+				missingColumns = append(missingColumns, col)
+			}
+		}
+		
+		if len(missingColumns) > 0 {
+			return nil, fmt.Errorf("positional mapping missing required columns: %v. Expected %d columns, got %d headers", 
+				missingColumns, len(p.PositionalColumns), len(headers))
+		}
+		
+		return mapping, nil
+	}
+	
+	// Original header-based mapping logic
 	// Normalize headers for comparison
 	normalizedHeaders := make([]string, len(headers))
 	for i, header := range headers {

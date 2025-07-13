@@ -584,6 +584,384 @@ func BenchmarkParseHTML(b *testing.B) {
 	}
 }
 
+// TestParseHTML_HeaderlessRows tests parsing table rows without headers using positional mapping
+func TestParseHTML_HeaderlessRows(t *testing.T) {
+	parser := NewHTMLTableParser()
+	parser.SetConsignableMapping() // Use standard Consignable format
+	
+	// HTML fragment with just table rows (typical Consignable copy)
+	htmlData := `
+	<tr>
+		<td>Downtown Store</td>
+		<td>Electronics Plus</td>
+		<td>2024-01-15</td>
+		<td>Samsung TV</td>
+		<td>$899.99</td>
+		<td>$89.99</td>
+		<td>$810.00</td>
+	</tr>
+	<tr>
+		<td>Mall Location</td>
+		<td>Home & Garden</td>
+		<td>01/16/2024</td>
+		<td>Patio Set</td>
+		<td>1299.00</td>
+		<td>129.90</td>
+		<td>1169.10</td>
+	</tr>
+	`
+	
+	result, err := parser.ParseHTML(htmlData)
+	if err != nil {
+		t.Fatalf("ParseHTML failed: %v", err)
+	}
+	
+	// Check basic statistics
+	if result.TotalRows != 2 {
+		t.Errorf("Expected 2 total rows, got %d", result.TotalRows)
+	}
+	
+	if result.SuccessCount != 2 {
+		t.Errorf("Expected 2 successful records, got %d", result.SuccessCount)
+	}
+	
+	if result.ErrorCount != 0 {
+		t.Errorf("Expected 0 errors, got %d. Errors: %v", result.ErrorCount, result.Errors)
+	}
+	
+	if len(result.Records) != 2 {
+		t.Errorf("Expected 2 records, got %d", len(result.Records))
+	}
+	
+	// Check first record
+	record1 := result.Records[0]
+	if record1.Store != "Downtown Store" {
+		t.Errorf("Expected store 'Downtown Store', got '%s'", record1.Store)
+	}
+	if record1.Vendor != "Electronics Plus" {
+		t.Errorf("Expected vendor 'Electronics Plus', got '%s'", record1.Vendor)
+	}
+	if record1.Date != "2024-01-15" {
+		t.Errorf("Expected date '2024-01-15', got '%s'", record1.Date)
+	}
+	if record1.Description != "Samsung TV" {
+		t.Errorf("Expected description 'Samsung TV', got '%s'", record1.Description)
+	}
+	if record1.SalePrice != 899.99 {
+		t.Errorf("Expected sale price 899.99, got %f", record1.SalePrice)
+	}
+	if record1.Commission != 89.99 {
+		t.Errorf("Expected commission 89.99, got %f", record1.Commission)
+	}
+	if record1.Remaining != 810.00 {
+		t.Errorf("Expected remaining 810.00, got %f", record1.Remaining)
+	}
+	
+	// Check second record with different date format
+	record2 := result.Records[1]
+	if record2.Date != "2024-01-16" {
+		t.Errorf("Expected date '2024-01-16', got '%s'", record2.Date)
+	}
+	if record2.SalePrice != 1299.00 {
+		t.Errorf("Expected sale price 1299.00, got %f", record2.SalePrice)
+	}
+}
+
+// TestParseHTML_CustomPositionalMapping tests custom positional column mapping
+func TestParseHTML_CustomPositionalMapping(t *testing.T) {
+	parser := NewHTMLTableParser()
+	
+	// Custom column order: Vendor, Store, Date, Description, Sale Price
+	parser.SetPositionalMapping([]string{
+		"vendor",
+		"store", 
+		"date",
+		"description",
+		"sale_price",
+	})
+	
+	htmlData := `
+	<tr>
+		<td>Tech Vendor</td>
+		<td>Test Store</td>
+		<td>2024-02-01</td>
+		<td>Test Product</td>
+		<td>$100.00</td>
+	</tr>
+	`
+	
+	result, err := parser.ParseHTML(htmlData)
+	if err != nil {
+		t.Fatalf("ParseHTML failed: %v", err)
+	}
+	
+	if result.SuccessCount != 1 {
+		t.Errorf("Expected 1 successful record, got %d", result.SuccessCount)
+	}
+	
+	record := result.Records[0]
+	if record.Vendor != "Tech Vendor" {
+		t.Errorf("Expected vendor 'Tech Vendor', got '%s'", record.Vendor)
+	}
+	if record.Store != "Test Store" {
+		t.Errorf("Expected store 'Test Store', got '%s'", record.Store)
+	}
+}
+
+// TestParseHTML_HeaderlessWithTbody tests parsing tbody sections without table wrapper
+func TestParseHTML_HeaderlessWithTbody(t *testing.T) {
+	parser := NewHTMLTableParser()
+	parser.SetConsignableMapping()
+	
+	htmlData := `
+	<tbody>
+		<tr>
+			<td>Store A</td>
+			<td>Vendor 1</td>
+			<td>2024-01-15</td>
+			<td>Product A</td>
+			<td>$150.00</td>
+			<td>$15.00</td>
+			<td>$135.00</td>
+		</tr>
+		<tr>
+			<td>Store B</td>
+			<td>Vendor 2</td>
+			<td>2024-01-16</td>
+			<td>Product B</td>
+			<td>$250.00</td>
+			<td>$25.00</td>
+			<td>$225.00</td>
+		</tr>
+	</tbody>
+	`
+	
+	result, err := parser.ParseHTML(htmlData)
+	if err != nil {
+		t.Fatalf("ParseHTML failed: %v", err)
+	}
+	
+	if result.SuccessCount != 2 {
+		t.Errorf("Expected 2 successful records, got %d", result.SuccessCount)
+	}
+	
+	if len(result.Records) != 2 {
+		t.Errorf("Expected 2 records, got %d", len(result.Records))
+	}
+}
+
+// TestParseHTML_HeaderlessInsufficientColumns tests error handling for insufficient columns
+func TestParseHTML_HeaderlessInsufficientColumns(t *testing.T) {
+	parser := NewHTMLTableParser()
+	parser.SetConsignableMapping() // Expects 7 columns
+	
+	// Only 3 columns provided
+	htmlData := `
+	<tr>
+		<td>Store A</td>
+		<td>Vendor 1</td>
+		<td>2024-01-15</td>
+	</tr>
+	`
+	
+	result, err := parser.ParseHTML(htmlData)
+	if err != nil {
+		t.Fatalf("ParseHTML failed: %v", err)
+	}
+	
+	// Should have 1 total row but 0 successful records due to missing required fields
+	if result.TotalRows != 1 {
+		t.Errorf("Expected 1 total row, got %d", result.TotalRows)
+	}
+	
+	if result.SuccessCount != 0 {
+		t.Errorf("Expected 0 successful records due to missing fields, got %d", result.SuccessCount)
+	}
+	
+	if result.ErrorCount != 1 {
+		t.Errorf("Expected 1 error record, got %d", result.ErrorCount)
+	}
+	
+	// Should have errors for missing required fields (description, sale_price)
+	if len(result.Errors) == 0 {
+		t.Error("Expected validation errors for missing required fields")
+	}
+	
+	// Check that we have errors for the missing required fields
+	foundDescriptionError := false
+	foundSalePriceError := false
+	
+	for _, parseErr := range result.Errors {
+		if parseErr.Column == "description" && strings.Contains(parseErr.Message, "required but empty") {
+			foundDescriptionError = true
+		}
+		if parseErr.Column == "sale_price" && strings.Contains(parseErr.Message, "required but empty") {
+			foundSalePriceError = true
+		}
+	}
+	
+	if !foundDescriptionError {
+		t.Error("Expected error for missing description field")
+	}
+	if !foundSalePriceError {
+		t.Error("Expected error for missing sale_price field")
+	}
+}
+
+// TestParseHTML_HeaderlessWithErrors tests error handling in headerless mode
+func TestParseHTML_HeaderlessWithErrors(t *testing.T) {
+	parser := NewHTMLTableParser()
+	parser.SetConsignableMapping()
+	
+	htmlData := `
+	<tr>
+		<td></td>
+		<td>Valid Vendor</td>
+		<td>invalid-date</td>
+		<td>Valid Product</td>
+		<td>not-a-price</td>
+		<td>10.00</td>
+		<td>90.00</td>
+	</tr>
+	<tr>
+		<td>Valid Store</td>
+		<td>Valid Vendor</td>
+		<td>2024-01-15</td>
+		<td>Valid Product</td>
+		<td>$199.99</td>
+		<td>$19.99</td>
+		<td>$180.00</td>
+	</tr>
+	`
+	
+	result, err := parser.ParseHTML(htmlData)
+	if err != nil {
+		t.Fatalf("ParseHTML failed: %v", err)
+	}
+	
+	if result.TotalRows != 2 {
+		t.Errorf("Expected 2 total rows, got %d", result.TotalRows)
+	}
+	
+	if result.ErrorCount != 1 {
+		t.Errorf("Expected 1 error, got %d", result.ErrorCount)
+	}
+	
+	if result.SuccessCount != 1 {
+		t.Errorf("Expected 1 success, got %d", result.SuccessCount)
+	}
+	
+	// Check that we have errors for the first row
+	if len(result.Errors) == 0 {
+		t.Error("Expected parsing errors, got none")
+	}
+	
+	// Check that the valid record was parsed correctly
+	if len(result.Records) != 1 {
+		t.Errorf("Expected 1 valid record, got %d", len(result.Records))
+	}
+	
+	if len(result.Records) > 0 {
+		record := result.Records[0]
+		if record.Store != "Valid Store" {
+			t.Errorf("Expected store 'Valid Store', got '%s'", record.Store)
+		}
+		if record.SalePrice != 199.99 {
+			t.Errorf("Expected sale price 199.99, got %f", record.SalePrice)
+		}
+	}
+}
+
+// TestParseHTML_RealWorldConsignableExample tests with realistic Consignable HTML
+func TestParseHTML_RealWorldConsignableExample(t *testing.T) {
+	parser := NewHTMLTableParser()
+	parser.SetConsignableMapping()
+	
+	// Simulate HTML that might be copied from Consignable
+	htmlData := `
+	<tr class="odd">
+		<td>Downtown Branch</td>
+		<td>Tech Solutions Inc.</td>
+		<td>March 15, 2024</td>
+		<td>Laptop Computer - Dell XPS 13</td>
+		<td>$1,299.99</td>
+		<td>$129.99</td>
+		<td>$1,170.00</td>
+	</tr>
+	<tr class="even">
+		<td>Mall Outlet</td>
+		<td>Home Essentials LLC</td>
+		<td>03/16/2024</td>
+		<td>Kitchen Appliance Set</td>
+		<td>$899.50</td>
+		<td>$89.95</td>
+		<td>$809.55</td>
+	</tr>
+	<tr class="odd">
+		<td>Westside Store</td>
+		<td>Fashion Forward Co.</td>
+		<td>2024-03-17</td>
+		<td>Designer Handbag Collection</td>
+		<td>$2,450.00</td>
+		<td>$245.00</td>
+		<td>$2,205.00</td>
+	</tr>
+	`
+	
+	result, err := parser.ParseHTML(htmlData)
+	if err != nil {
+		t.Fatalf("ParseHTML failed: %v", err)
+	}
+	
+	if result.SuccessCount != 3 {
+		t.Errorf("Expected 3 successful records, got %d", result.SuccessCount)
+	}
+	
+	if result.ErrorCount != 0 {
+		t.Errorf("Expected 0 errors, got %d. Errors: %v", result.ErrorCount, result.Errors)
+	}
+	
+	// Check that different date formats were parsed correctly
+	expectedDates := []string{"2024-03-15", "2024-03-16", "2024-03-17"}
+	for i, record := range result.Records {
+		if record.Date != expectedDates[i] {
+			t.Errorf("Record %d: expected date '%s', got '%s'", i, expectedDates[i], record.Date)
+		}
+	}
+	
+	// Check that currency values with commas were parsed correctly
+	if result.Records[0].SalePrice != 1299.99 {
+		t.Errorf("Expected first record sale price 1299.99, got %f", result.Records[0].SalePrice)
+	}
+	
+	if result.Records[2].SalePrice != 2450.00 {
+		t.Errorf("Expected third record sale price 2450.00, got %f", result.Records[2].SalePrice)
+	}
+}
+
+// TestLooksLikeTableRows tests the table row detection logic
+func TestLooksLikeTableRows(t *testing.T) {
+	parser := NewHTMLTableParser()
+	
+	testCases := []struct {
+		input    string
+		expected bool
+	}{
+		{"<tr><td>data</td></tr>", true},
+		{"<table><tr><td>data</td></tr></table>", false},
+		{"<TR><TD>data</TD></TR>", true}, // Case insensitive
+		{"<div>not table rows</div>", false},
+		{"<tbody><tr><td>data</td></tr></tbody>", true},
+		{"", false},
+	}
+	
+	for _, tc := range testCases {
+		result := parser.looksLikeTableRows(tc.input)
+		if result != tc.expected {
+			t.Errorf("For input '%s', expected %t, got %t", tc.input, tc.expected, result)
+		}
+	}
+}
 // TestParseHTML_ProcessingTime tests that processing time is recorded
 func TestParseHTML_ProcessingTime(t *testing.T) {
 	parser := NewHTMLTableParser()
