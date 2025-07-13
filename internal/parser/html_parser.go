@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"golang.org/x/net/html"
-	"../models"
+	"sales-track/internal/models"
 )
 
 // Package-level compiled regex patterns for performance optimization
