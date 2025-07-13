@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"golang.org/x/net/html"
-	"sales-track/internal/models"
+	"../models"
 )
 
 // HTMLTableParser handles parsing HTML table data into sales records
