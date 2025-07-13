@@ -16,13 +16,13 @@ import (
 type App struct {
 	ctx       context.Context
 	dbService *database.Service
-	parser    *parser.HTMLTableParser
+	// Removed parser field to avoid shared state and cross-request side effects
 }
 
 // NewApp creates a new App application struct
 func NewApp() *App {
 	return &App{
-		parser: parser.NewHTMLTableParser(),
+		// Removed parser initialization - create fresh instances per request
 	}
 }
 
@@ -60,12 +60,17 @@ func (a *App) ImportHTMLData(htmlData string) (*ImportResult, error) {
 		return nil, fmt.Errorf("database service not initialized")
 	}
 
+	// Create fresh parser instance to avoid cross-request side effects
+	parser := parser.NewHTMLTableParser()
+
 	// Parse HTML data
-	parseResult, err := a.parser.ParseHTML(htmlData)
+	parseResult, err := parser.ParseHTML(htmlData)
 	if err != nil {
 		return &ImportResult{
 			Success:      false,
 			ErrorMessage: fmt.Sprintf("Failed to parse HTML data: %v", err),
+			TotalRows:    0,
+			ParsedRows:   0,
 		}, nil
 	}
 
@@ -114,12 +119,18 @@ func (a *App) ImportHTMLDataBatch(htmlData string) (*ImportResult, error) {
 		return nil, fmt.Errorf("database service not initialized")
 	}
 
+	// Create fresh parser instance to avoid cross-request side effects
+	parser := parser.NewHTMLTableParser()
+
 	// Parse HTML data
-	parseResult, err := a.parser.ParseHTML(htmlData)
+	parseResult, err := parser.ParseHTML(htmlData)
 	if err != nil {
 		return &ImportResult{
 			Success:      false,
 			ErrorMessage: fmt.Sprintf("Failed to parse HTML data: %v", err),
+			TotalRows:    0,
+			ParsedRows:   0,
+			ParseErrors:  nil, // Will be nil for complete parse failures,
 		}, nil
 	}
 
@@ -156,22 +167,118 @@ func (a *App) ImportHTMLDataWithOptions(htmlData string, options ImportOptions) 
 		return nil, fmt.Errorf("database service not initialized")
 	}
 
-	// Configure parser based on options
+	// Create fresh parser instance to avoid cross-request side effects
+	parser := parser.NewHTMLTableParser()
+
+	// Configure parser based on options (no shared state concerns)
 	if options.UseConsignableFormat {
-		a.parser.SetConsignableMapping()
+		parser.SetConsignableMapping()
 	} else if len(options.CustomColumnMapping) > 0 {
-		a.parser.SetPositionalMapping(options.CustomColumnMapping)
+		parser.SetPositionalMapping(options.CustomColumnMapping)
 	}
 
 	// Set strict mode if requested
-	a.parser.StrictMode = options.StrictMode
+	parser.StrictMode = options.StrictMode
 
 	// Use batch import if available
 	if options.UseBatchImport {
-		return a.ImportHTMLDataBatch(htmlData)
+		return a.importHTMLDataBatchWithParser(htmlData, parser)
 	}
 
-	return a.ImportHTMLData(htmlData)
+	return a.importHTMLDataWithParser(htmlData, parser)
+}
+
+// importHTMLDataWithParser imports HTML data using the provided parser instance
+func (a *App) importHTMLDataWithParser(htmlData string, parser *parser.HTMLTableParser) (*ImportResult, error) {
+	// Parse HTML data
+	parseResult, err := parser.ParseHTML(htmlData)
+	if err != nil {
+		return &ImportResult{
+			Success:      false,
+			ErrorMessage: fmt.Sprintf("Failed to parse HTML data: %v", err),
+			TotalRows:    0,
+			ParsedRows:   0,
+		}, nil
+	}
+
+	// Convert parsed records to database format and import
+	var importedRecords []models.SalesRecord
+	var importErrors []ImportError
+
+	for _, record := range parseResult.Records {
+		// Import individual record
+		savedRecord, err := a.dbService.CreateSalesRecord(record)
+		if err != nil {
+			importErrors = append(importErrors, ImportError{
+				Record: record,
+				Error:  err.Error(),
+			})
+			continue
+		}
+		importedRecords = append(importedRecords, *savedRecord)
+	}
+
+	// Prepare result
+	result := &ImportResult{
+		Success:           len(importedRecords) > 0,
+		TotalRows:         parseResult.TotalRows,
+		ParsedRows:        parseResult.SuccessCount,
+		ImportedRows:      len(importedRecords),
+		ParseErrors:       parseResult.Errors,
+		ImportErrors:      importErrors,
+		ProcessingTime:    parseResult.Statistics.ProcessingTime,
+		ImportedRecords:   importedRecords,
+		ColumnMapping:     parseResult.ColumnMapping,
+		DataTypesDetected: parseResult.Statistics.DataTypesDetected,
+	}
+
+	if len(importErrors) > 0 {
+		result.ErrorMessage = fmt.Sprintf("Imported %d of %d records. %d records failed to import.", 
+			len(importedRecords), parseResult.SuccessCount, len(importErrors))
+	}
+
+	return result, nil
+}
+
+// importHTMLDataBatchWithParser imports HTML data using batch operations with the provided parser
+func (a *App) importHTMLDataBatchWithParser(htmlData string, parser *parser.HTMLTableParser) (*ImportResult, error) {
+	// Parse HTML data
+	parseResult, err := parser.ParseHTML(htmlData)
+	if err != nil {
+		return &ImportResult{
+			Success:      false,
+			ErrorMessage: fmt.Sprintf("Failed to parse HTML data: %v", err),
+			TotalRows:    0,
+			ParsedRows:   0,
+			ParseErrors:  nil, // Will be nil for complete parse failures,
+		}, nil
+	}
+
+	// Use batch import for better performance
+	importedRecords, err := a.dbService.CreateSalesRecordsBatch(parseResult.Records)
+	if err != nil {
+		return &ImportResult{
+			Success:      false,
+			ErrorMessage: fmt.Sprintf("Failed to import records: %v", err),
+			TotalRows:    parseResult.TotalRows,
+			ParsedRows:   parseResult.SuccessCount,
+			ParseErrors:  parseResult.Errors,
+		}, nil
+	}
+
+	// Prepare result
+	result := &ImportResult{
+		Success:           true,
+		TotalRows:         parseResult.TotalRows,
+		ParsedRows:        parseResult.SuccessCount,
+		ImportedRows:      len(importedRecords),
+		ProcessingTime:    parseResult.Statistics.ProcessingTime,
+		ImportedRecords:   importedRecords,
+		ColumnMapping:     parseResult.ColumnMapping,
+		DataTypesDetected: parseResult.Statistics.DataTypesDetected,
+	}
+
+	return result, nil
 }
 
 // GetImportStatistics returns statistics about imported data
@@ -209,8 +316,11 @@ func (a *App) GetImportStatistics() (*ImportStatistics, error) {
 
 // ValidateHTMLData validates HTML data without importing
 func (a *App) ValidateHTMLData(htmlData string) (*ValidationResult, error) {
+	// Create fresh parser instance to avoid cross-request side effects
+	parser := parser.NewHTMLTableParser()
+
 	// Parse HTML data without importing
-	parseResult, err := a.parser.ParseHTML(htmlData)
+	parseResult, err := parser.ParseHTML(htmlData)
 	if err != nil {
 		return &ValidationResult{
 			Valid:        false,
