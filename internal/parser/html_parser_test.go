@@ -6,11 +6,9 @@ import (
 	"time"
 )
 
-// TestParseHTML_BasicTable tests parsing a basic HTML table
-func TestParseHTML_BasicTable(t *testing.T) {
-	parser := NewHTMLTableParser()
-	
-	htmlData := `
+// Test data constants for better maintainability and readability
+const (
+	basicTableHTML = `
 	<table>
 		<tr>
 			<th>Store</th>
@@ -41,8 +39,117 @@ func TestParseHTML_BasicTable(t *testing.T) {
 		</tr>
 	</table>
 	`
+
+	variousColumnNamesHTML = `
+	<table>
+		<tr>
+			<th>Shop Name</th>
+			<th>Supplier</th>
+			<th>Sale Date</th>
+			<th>Product</th>
+			<th>Amount</th>
+			<th>Fee</th>
+			<th>Balance</th>
+		</tr>
+		<tr>
+			<td>Test Store</td>
+			<td>Test Vendor</td>
+			<td>2024-02-01</td>
+			<td>Test Product</td>
+			<td>$100.00</td>
+			<td>$10.00</td>
+			<td>$90.00</td>
+		</tr>
+	</table>
+	`
+
+	headerlessRowsHTML = `
+	<tr>
+		<td>Downtown Store</td>
+		<td>Electronics Plus</td>
+		<td>2024-01-15</td>
+		<td>Samsung TV</td>
+		<td>$899.99</td>
+		<td>$89.99</td>
+		<td>$810.00</td>
+	</tr>
+	<tr>
+		<td>Mall Location</td>
+		<td>Home & Garden</td>
+		<td>01/16/2024</td>
+		<td>Patio Set</td>
+		<td>1299.00</td>
+		<td>129.90</td>
+		<td>1169.10</td>
+	</tr>
+	`
+
+	errorHandlingHTML = `
+	<table>
+		<tr>
+			<th>Store</th>
+			<th>Vendor</th>
+			<th>Date</th>
+			<th>Description</th>
+			<th>Sale Price</th>
+		</tr>
+		<tr>
+			<td></td>
+			<td>Test Vendor</td>
+			<td>invalid-date</td>
+			<td></td>
+			<td>not-a-number</td>
+		</tr>
+		<tr>
+			<td>Valid Store</td>
+			<td>Valid Vendor</td>
+			<td>2024-01-15</td>
+			<td>Valid Product</td>
+			<td>100.00</td>
+		</tr>
+	</table>
+	`
+
+	realWorldConsignableHTML = `
+	<tr class="odd">
+		<td>Downtown Branch</td>
+		<td>Tech Solutions Inc.</td>
+		<td>March 15, 2024</td>
+		<td>Laptop Computer - Dell XPS 13</td>
+		<td>$1,299.99</td>
+		<td>$129.99</td>
+		<td>$1,170.00</td>
+	</tr>
+	<tr class="even">
+		<td>Mall Outlet</td>
+		<td>Home Essentials LLC</td>
+		<td>03/16/2024</td>
+		<td>Kitchen Appliance Set</td>
+		<td>$899.50</td>
+		<td>$89.95</td>
+		<td>$809.55</td>
+	</tr>
+	<tr class="odd">
+		<td>Westside Store</td>
+		<td>Fashion Forward Co.</td>
+		<td>2024-03-17</td>
+		<td>Designer Handbag Collection</td>
+		<td>$2,450.00</td>
+		<td>$245.00</td>
+		<td>$2,205.00</td>
+	</tr>
+	`
+
+	tabDelimitedData = `Store	Vendor	Date	Description	Sale Price	Commission	Remaining
+Downtown Store	Electronics Plus	2024-01-15	Samsung TV	899.99	89.99	810.00
+Mall Location	Home & Garden	2024-01-16	Patio Set	1299.00	129.90	1169.10`
+)
+
+// TestParseHTML_BasicTable tests parsing a basic HTML table
+func TestParseHTML_BasicTable(t *testing.T) {
+	parser := NewHTMLTableParser()
 	
-	result, err := parser.ParseHTML(htmlData)
+	result, err := parser.ParseHTML(basicTableHTML)
 	if err != nil {
 		t.Fatalf("ParseHTML failed: %v", err)
 	}
@@ -102,30 +209,7 @@ func TestParseHTML_BasicTable(t *testing.T) {
 func TestParseHTML_VariousColumnNames(t *testing.T) {
 	parser := NewHTMLTableParser()
 	
-	htmlData := `
-	<table>
-		<tr>
-			<th>Shop Name</th>
-			<th>Supplier</th>
-			<th>Sale Date</th>
-			<th>Product</th>
-			<th>Amount</th>
-			<th>Fee</th>
-			<th>Balance</th>
-		</tr>
-		<tr>
-			<td>Test Store</td>
-			<td>Test Vendor</td>
-			<td>2024-02-01</td>
-			<td>Test Product</td>
-			<td>$100.00</td>
-			<td>$10.00</td>
-			<td>$90.00</td>
-		</tr>
-	</table>
-	`
-	
-	result, err := parser.ParseHTML(htmlData)
+	result, err := parser.ParseHTML(variousColumnNamesHTML)
 	if err != nil {
 		t.Fatalf("ParseHTML failed: %v", err)
 	}
@@ -147,11 +231,7 @@ func TestParseHTML_VariousColumnNames(t *testing.T) {
 func TestParseHTML_TabDelimited(t *testing.T) {
 	parser := NewHTMLTableParser()
 	
-	tabData := `Store	Vendor	Date	Description	Sale Price	Commission	Remaining
-Downtown Store	Electronics Plus	2024-01-15	Samsung TV	899.99	89.99	810.00
-Mall Location	Home & Garden	2024-01-16	Patio Set	1299.00	129.90	1169.10`
-	
-	result, err := parser.ParseHTML(tabData)
+	result, err := parser.ParseHTML(tabDelimitedData)
 	if err != nil {
 		t.Fatalf("ParseHTML failed: %v", err)
 	}
@@ -169,33 +249,7 @@ Mall Location	Home & Garden	2024-01-16	Patio Set	1299.00	129.90	1169.10`
 func TestParseHTML_ErrorHandling(t *testing.T) {
 	parser := NewHTMLTableParser()
 	
-	htmlData := `
-	<table>
-		<tr>
-			<th>Store</th>
-			<th>Vendor</th>
-			<th>Date</th>
-			<th>Description</th>
-			<th>Sale Price</th>
-		</tr>
-		<tr>
-			<td></td>
-			<td>Test Vendor</td>
-			<td>invalid-date</td>
-			<td></td>
-			<td>not-a-number</td>
-		</tr>
-		<tr>
-			<td>Valid Store</td>
-			<td>Valid Vendor</td>
-			<td>2024-01-15</td>
-			<td>Valid Product</td>
-			<td>100.00</td>
-		</tr>
-	</table>
-	`
-	
-	result, err := parser.ParseHTML(htmlData)
+	result, err := parser.ParseHTML(errorHandlingHTML)
 	if err != nil {
 		t.Fatalf("ParseHTML failed: %v", err)
 	}
@@ -589,29 +643,7 @@ func TestParseHTML_HeaderlessRows(t *testing.T) {
 	parser := NewHTMLTableParser()
 	parser.SetConsignableMapping() // Use standard Consignable format
 	
-	// HTML fragment with just table rows (typical Consignable copy)
-	htmlData := `
-	<tr>
-		<td>Downtown Store</td>
-		<td>Electronics Plus</td>
-		<td>2024-01-15</td>
-		<td>Samsung TV</td>
-		<td>$899.99</td>
-		<td>$89.99</td>
-		<td>$810.00</td>
-	</tr>
-	<tr>
-		<td>Mall Location</td>
-		<td>Home & Garden</td>
-		<td>01/16/2024</td>
-		<td>Patio Set</td>
-		<td>1299.00</td>
-		<td>129.90</td>
-		<td>1169.10</td>
-	</tr>
-	`
-	
-	result, err := parser.ParseHTML(htmlData)
+	result, err := parser.ParseHTML(headerlessRowsHTML)
 	if err != nil {
 		t.Fatalf("ParseHTML failed: %v", err)
 	}
@@ -877,38 +909,7 @@ func TestParseHTML_RealWorldConsignableExample(t *testing.T) {
 	parser := NewHTMLTableParser()
 	parser.SetConsignableMapping()
 	
-	// Simulate HTML that might be copied from Consignable
-	htmlData := `
-	<tr class="odd">
-		<td>Downtown Branch</td>
-		<td>Tech Solutions Inc.</td>
-		<td>March 15, 2024</td>
-		<td>Laptop Computer - Dell XPS 13</td>
-		<td>$1,299.99</td>
-		<td>$129.99</td>
-		<td>$1,170.00</td>
-	</tr>
-	<tr class="even">
-		<td>Mall Outlet</td>
-		<td>Home Essentials LLC</td>
-		<td>03/16/2024</td>
-		<td>Kitchen Appliance Set</td>
-		<td>$899.50</td>
-		<td>$89.95</td>
-		<td>$809.55</td>
-	</tr>
-	<tr class="odd">
-		<td>Westside Store</td>
-		<td>Fashion Forward Co.</td>
-		<td>2024-03-17</td>
-		<td>Designer Handbag Collection</td>
-		<td>$2,450.00</td>
-		<td>$245.00</td>
-		<td>$2,205.00</td>
-	</tr>
-	`
-	
-	result, err := parser.ParseHTML(htmlData)
+	result, err := parser.ParseHTML(realWorldConsignableHTML)
 	if err != nil {
 		t.Fatalf("ParseHTML failed: %v", err)
 	}

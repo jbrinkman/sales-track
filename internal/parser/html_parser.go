@@ -11,6 +11,23 @@ import (
 	"sales-track/internal/models"
 )
 
+// Package-level compiled regex patterns for performance optimization
+// These are compiled once at package initialization instead of on every function call
+var (
+	datePatterns = []*regexp.Regexp{
+		regexp.MustCompile(`^\d{4}-\d{1,2}-\d{1,2}`),
+		regexp.MustCompile(`^\d{1,2}/\d{1,2}/\d{4}`),
+		regexp.MustCompile(`^\d{1,2}-\d{1,2}-\d{4}`),
+		regexp.MustCompile(`^[A-Za-z]{3,9}\s+\d{1,2},?\s+\d{4}`),
+	}
+	
+	currencyPatterns = []*regexp.Regexp{
+		regexp.MustCompile(`^\$\d+\.?\d*`),
+		regexp.MustCompile(`^\d+\.\d{2}$`),
+		regexp.MustCompile(`^\(\d+\.?\d*\)$`), // Negative in parentheses
+	}
+)
+
 // HTMLTableParser handles parsing HTML table data into sales records
 type HTMLTableParser struct {
 	// Configuration options
@@ -93,7 +110,25 @@ type ValueRange struct {
 	Count int         `json:"count"`
 }
 
-// ColumnMapping defines the expected column names and their variations
+// Required columns for sales record validation
+var requiredColumns = []string{"store", "vendor", "date", "description", "sale_price"}
+
+// validateRequiredColumns consolidates validation logic for required columns
+func (p *HTMLTableParser) validateRequiredColumns(mapping map[string]int, context string) error {
+	missingColumns := []string{}
+	
+	for _, col := range requiredColumns {
+		if _, exists := mapping[col]; !exists {
+			missingColumns = append(missingColumns, col)
+		}
+	}
+	
+	if len(missingColumns) > 0 {
+		return fmt.Errorf("%s missing required columns: %v", context, missingColumns)
+	}
+	
+	return nil
+}
 var ColumnMapping = map[string][]string{
 	"store": {
 		"store", "shop", "location", "outlet", "branch", "store name", "shop name",
@@ -453,19 +488,10 @@ func (p *HTMLTableParser) createColumnMapping(headers []string) (map[string]int,
 			}
 		}
 		
-		// Validate we have the minimum required columns
-		requiredColumns := []string{"store", "vendor", "date", "description", "sale_price"}
-		missingColumns := []string{}
-		
-		for _, col := range requiredColumns {
-			if _, exists := mapping[col]; !exists {
-				missingColumns = append(missingColumns, col)
-			}
-		}
-		
-		if len(missingColumns) > 0 {
-			return nil, fmt.Errorf("positional mapping missing required columns: %v. Expected %d columns, got %d headers", 
-				missingColumns, len(p.PositionalColumns), len(headers))
+		// Use consolidated validation
+		if err := p.validateRequiredColumns(mapping, "positional mapping"); err != nil {
+			return nil, fmt.Errorf("%w. Expected %d columns, got %d headers", 
+				err, len(p.PositionalColumns), len(headers))
 		}
 		
 		return mapping, nil
@@ -500,18 +526,9 @@ func (p *HTMLTableParser) createColumnMapping(headers []string) (map[string]int,
 		}
 	}
 	
-	// Ensure we have at least the minimum required columns
-	requiredColumns := []string{"store", "vendor", "date", "description", "sale_price"}
-	missingColumns := []string{}
-	
-	for _, col := range requiredColumns {
-		if _, exists := mapping[col]; !exists {
-			missingColumns = append(missingColumns, col)
-		}
-	}
-	
-	if len(missingColumns) > 0 {
-		return nil, fmt.Errorf("missing required columns: %v. Available headers: %v", missingColumns, headers)
+	// Use consolidated validation
+	if err := p.validateRequiredColumns(mapping, "header-based mapping"); err != nil {
+		return nil, fmt.Errorf("%w. Available headers: %v", err, headers)
 	}
 	
 	return mapping, nil
@@ -771,16 +788,9 @@ func (p *HTMLTableParser) detectDataType(values []string) string {
 	return "text"
 }
 
-// looksLikeDate checks if a string looks like a date
+// looksLikeDate checks if a string looks like a date using pre-compiled patterns
 func (p *HTMLTableParser) looksLikeDate(value string) bool {
-	// Simple heuristics for date detection
-	datePatterns := []*regexp.Regexp{
-		regexp.MustCompile(`^\d{4}-\d{1,2}-\d{1,2}`),
-		regexp.MustCompile(`^\d{1,2}/\d{1,2}/\d{4}`),
-		regexp.MustCompile(`^\d{1,2}-\d{1,2}-\d{4}`),
-		regexp.MustCompile(`^[A-Za-z]{3,9}\s+\d{1,2},?\s+\d{4}`),
-	}
-	
+	// Use pre-compiled regex patterns for better performance
 	for _, pattern := range datePatterns {
 		if pattern.MatchString(value) {
 			return true
@@ -790,15 +800,9 @@ func (p *HTMLTableParser) looksLikeDate(value string) bool {
 	return false
 }
 
-// looksLikeCurrency checks if a string looks like a currency value
+// looksLikeCurrency checks if a string looks like a currency value using pre-compiled patterns
 func (p *HTMLTableParser) looksLikeCurrency(value string) bool {
-	// Simple heuristics for currency detection
-	currencyPatterns := []*regexp.Regexp{
-		regexp.MustCompile(`^\$\d+\.?\d*`),
-		regexp.MustCompile(`^\d+\.\d{2}$`),
-		regexp.MustCompile(`^\(\d+\.?\d*\)$`), // Negative in parentheses
-	}
-	
+	// Use pre-compiled regex patterns for better performance
 	for _, pattern := range currencyPatterns {
 		if pattern.MatchString(value) {
 			return true
