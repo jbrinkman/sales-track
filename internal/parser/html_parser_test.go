@@ -6,41 +6,42 @@ import (
 	"time"
 )
 
+const basicTableHTML = `
+<table>
+	<tr>
+		<th>Store</th>
+		<th>Vendor</th>
+		<th>Date</th>
+		<th>Description</th>
+		<th>Sale Price</th>
+		<th>Commission</th>
+		<th>Remaining</th>
+	</tr>
+	<tr>
+		<td>Downtown Store</td>
+		<td>Electronics Plus</td>
+		<td>2024-01-15</td>
+		<td>Samsung TV</td>
+		<td>$899.99</td>
+		<td>$89.99</td>
+		<td>$810.00</td>
+	</tr>
+	<tr>
+		<td>Mall Location</td>
+		<td>Home & Garden</td>
+		<td>01/16/2024</td>
+		<td>Patio Set</td>
+		<td>1299.00</td>
+		<td>129.90</td>
+		<td>1169.10</td>
+	</tr>
+</table>
+`
 // TestParseHTML_BasicTable tests parsing a basic HTML table
 func TestParseHTML_BasicTable(t *testing.T) {
 	parser := NewHTMLTableParser()
 	
-	htmlData := `
-	<table>
-		<tr>
-			<th>Store</th>
-			<th>Vendor</th>
-			<th>Date</th>
-			<th>Description</th>
-			<th>Sale Price</th>
-			<th>Commission</th>
-			<th>Remaining</th>
-		</tr>
-		<tr>
-			<td>Downtown Store</td>
-			<td>Electronics Plus</td>
-			<td>2024-01-15</td>
-			<td>Samsung TV</td>
-			<td>$899.99</td>
-			<td>$89.99</td>
-			<td>$810.00</td>
-		</tr>
-		<tr>
-			<td>Mall Location</td>
-			<td>Home & Garden</td>
-			<td>01/16/2024</td>
-			<td>Patio Set</td>
-			<td>1299.00</td>
-			<td>129.90</td>
-			<td>1169.10</td>
-		</tr>
-	</table>
-	`
+	htmlData := basicTableHTML
 	
 	result, err := parser.ParseHTML(htmlData)
 	if err != nil {
