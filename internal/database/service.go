@@ -159,11 +159,15 @@ func (s *Service) GetTableInfo() ([]string, error) {
 }
 
 // ExecTx executes a function within a transaction
+// NOTE: Current limitation - the callback receives the original Service which uses
+// the main connection, not the transaction. For true transactional operations,
+// use the database layer's ExecTx method directly or implement transaction-aware repositories.
+// This method is primarily for coordinating multiple service-level operations.
 func (s *Service) ExecTx(fn func(*Service) error) error {
 	return s.db.ExecTx(func(tx *sql.Tx) error {
-		// Create a temporary service with the transaction
-		// Note: This is a simplified approach. In a production system,
-		// you might want to create transaction-aware repositories
+		// The service passed to the callback uses the main connection, not the transaction
+		// This is a design limitation that should be addressed in future versions
+		// by implementing transaction-aware repositories
 		return fn(s)
 	})
 }

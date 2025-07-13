@@ -9,6 +9,21 @@ import (
 	"sales-track/internal/models"
 )
 
+// Package-level validation maps to avoid repeated allocations
+var (
+	validSortFields = map[string]bool{
+		"date":       true,
+		"store":      true,
+		"vendor":     true,
+		"sale_price": true,
+		"created_at": true,
+	}
+	validSortOrders = map[string]bool{
+		"asc":  true,
+		"desc": true,
+	}
+)
+
 // SalesRepository handles database operations for sales records
 type SalesRepository struct {
 	db *DB
@@ -203,18 +218,6 @@ func (r *SalesRepository) List(filter models.SalesRecordFilter) (*models.SalesRe
 	// Build ORDER BY clause
 	orderBy := "ORDER BY date DESC" // Default sort
 	if filter.SortBy != nil && filter.SortOrder != nil {
-		validSortFields := map[string]bool{
-			"date":       true,
-			"store":      true,
-			"vendor":     true,
-			"sale_price": true,
-			"created_at": true,
-		}
-		validSortOrders := map[string]bool{
-			"asc":  true,
-			"desc": true,
-		}
-
 		if validSortFields[*filter.SortBy] && validSortOrders[*filter.SortOrder] {
 			orderBy = fmt.Sprintf("ORDER BY %s %s", *filter.SortBy, strings.ToUpper(*filter.SortOrder))
 		}
@@ -298,14 +301,13 @@ func (r *SalesRepository) CreateBatch(records []models.CreateSalesRecordRequest)
 	var createdRecords []models.SalesRecord
 
 	err := r.db.ExecTx(func(tx *sql.Tx) error {
-		stmt, err := tx.Prepare(`
-			INSERT INTO sales_records (store, vendor, date, description, sale_price, commission, remaining)
-			VALUES (?, ?, ?, ?, ?, ?, ?)
-		`)
-		if err != nil {
-			return fmt.Errorf("failed to prepare statement: %w", err)
+		// Build bulk insert query
+		if len(records) == 0 {
+			return nil
 		}
-		defer stmt.Close()
+
+		placeholders := make([]string, 0, len(records))
+		values := make([]interface{}, 0, len(records)*7)
 
 		for _, record := range records {
 			// Parse the date string
@@ -314,30 +316,36 @@ func (r *SalesRepository) CreateBatch(records []models.CreateSalesRecordRequest)
 				return fmt.Errorf("invalid date format for record: %w", err)
 			}
 
-			result, err := stmt.Exec(
-				record.Store,
-				record.Vendor,
-				date,
-				record.Description,
-				record.SalePrice,
-				record.Commission,
-				record.Remaining,
-			)
-			if err != nil {
-				return fmt.Errorf("failed to insert sales record: %w", err)
-			}
+			placeholders = append(placeholders, "(?, ?, ?, ?, ?, ?, ?)")
+			values = append(values, record.Store, record.Vendor, date, record.Description, record.SalePrice, record.Commission, record.Remaining)
+		}
 
-			id, err := result.LastInsertId()
-			if err != nil {
-				return fmt.Errorf("failed to get last insert ID: %w", err)
-			}
+		query := fmt.Sprintf(`
+			INSERT INTO sales_records (store, vendor, date, description, sale_price, commission, remaining)
+			VALUES %s
+		`, strings.Join(placeholders, ","))
 
-			// Fetch the created record (within the transaction)
+		_, err := tx.Exec(query, values...)
+		if err != nil {
+			return fmt.Errorf("failed to insert sales records: %w", err)
+		}
+
+		// Fetch all created records in a single query
+		// Get the records that were just inserted by ordering by ID DESC and limiting to the number of records
+		rows, err := tx.Query(`
+			SELECT id, store, vendor, date, description, sale_price, commission, remaining, created_at, updated_at
+			FROM sales_records
+			ORDER BY id DESC
+			LIMIT ?
+		`, len(records))
+		if err != nil {
+			return fmt.Errorf("failed to fetch created records: %w", err)
+		}
+		defer rows.Close()
+
+		for rows.Next() {
 			var createdRecord models.SalesRecord
-			err = tx.QueryRow(`
-				SELECT id, store, vendor, date, description, sale_price, commission, remaining, created_at, updated_at
-				FROM sales_records WHERE id = ?
-			`, id).Scan(
+			err := rows.Scan(
 				&createdRecord.ID,
 				&createdRecord.Store,
 				&createdRecord.Vendor,
@@ -350,10 +358,18 @@ func (r *SalesRepository) CreateBatch(records []models.CreateSalesRecordRequest)
 				&createdRecord.UpdatedAt,
 			)
 			if err != nil {
-				return fmt.Errorf("failed to fetch created record: %w", err)
+				return fmt.Errorf("failed to scan created record: %w", err)
 			}
-
 			createdRecords = append(createdRecords, createdRecord)
+		}
+
+		if err := rows.Err(); err != nil {
+			return fmt.Errorf("error iterating created records: %w", err)
+		}
+
+		// Reverse the slice to maintain insertion order
+		for i, j := 0, len(createdRecords)-1; i < j; i, j = i+1, j-1 {
+			createdRecords[i], createdRecords[j] = createdRecords[j], createdRecords[i]
 		}
 
 		return nil
