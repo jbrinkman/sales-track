@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"io/ioutil"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,7 +10,8 @@ import (
 	"sales-track/internal/parser"
 )
 
-func main() {
+// RunConsignableDemo demonstrates the Consignable HTML parser workflow
+func RunConsignableDemo() {
 	fmt.Println("=== Consignable HTML Parser Demo ===\n")
 	
 	// Create parser configured for Consignable format
@@ -19,7 +19,8 @@ func main() {
 	htmlParser.SetConsignableMapping() // Store, Vendor, Date, Description, Sale Price, Commission, Remaining
 	
 	// Get the directory of this example file
-	exampleDir := filepath.Dir(os.Args[0])
+	exampleDir, _ := os.Getwd()
+	exampleDir = filepath.Join(exampleDir, "internal", "parser", "examples")
 	
 	// Demo 1: Parse Consignable row fragment
 	fmt.Println("1. Parsing Consignable HTML rows (headerless)...")
@@ -27,7 +28,7 @@ func main() {
 	if htmlData, err := ioutil.ReadFile(consignableFile); err == nil {
 		result, err := htmlParser.ParseHTML(string(htmlData))
 		if err != nil {
-			log.Printf("Consignable parsing failed: %v", err)
+			fmt.Printf("Consignable parsing failed: %v\n", err)
 		} else {
 			printConsignableResults("Consignable Rows", result)
 		}
@@ -62,7 +63,7 @@ func main() {
 	
 	result, err := htmlParser.ParseHTML(inlineHTML)
 	if err != nil {
-		log.Printf("Inline parsing failed: %v", err)
+		fmt.Printf("Inline parsing failed: %v\n", err)
 	} else {
 		printConsignableResults("Inline Consignable Data", result)
 	}
@@ -109,7 +110,7 @@ func main() {
 	
 	result, err = customParser.ParseHTML(customHTML)
 	if err != nil {
-		log.Printf("Custom parsing failed: %v", err)
+		fmt.Printf("Custom parsing failed: %v\n", err)
 	} else {
 		printConsignableResults("Custom Column Order", result)
 	}

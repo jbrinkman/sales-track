@@ -15,10 +15,10 @@ func main() {
 	// Get the directory of this example file
 	exampleDir := filepath.Dir(os.Args[0])
 	
+	fmt.Println("=== HTML Table Parser Demo ===\n")
+	
 	// Create parser
 	htmlParser := parser.NewHTMLTableParser()
-	
-	fmt.Println("=== HTML Table Parser Demo ===\n")
 	
 	// Demo 1: Parse HTML file
 	fmt.Println("1. Parsing HTML table file...")
@@ -86,6 +86,11 @@ func main() {
 	} else {
 		printResults("HTML with Errors", result)
 	}
+	
+	fmt.Println("\n" + strings.Repeat("=", 70) + "\n")
+	
+	// Demo 4: Run Consignable-specific demo
+	RunConsignableDemo()
 }
 
 func printResults(title string, result *parser.ParseResult) {
